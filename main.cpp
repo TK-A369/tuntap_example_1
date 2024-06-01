@@ -13,10 +13,12 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <map>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -70,7 +72,7 @@ int main(int argc, char** argv) {
          }},
         {{"a", "addr"}, 1, [&argv, &addr_str](uint32_t pos) {
              addr_str = argv[pos + 1];
-             std::cout << "Setting USB device name: " << addr_str << '\n';
+             std::cout << "Setting address: " << addr_str << '\n';
          }}};
     std::map<char, cmd_flag_entry*> cmd_flags_by_short_name;
     std::map<std::string, cmd_flag_entry*> cmd_flags_by_long_name;
@@ -160,6 +162,8 @@ int main(int argc, char** argv) {
             write(tun_fd, buf, nbytes);
             std::cout << "Read " << nbytes << " bytes from USB\n";
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     return 0;
