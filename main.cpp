@@ -53,6 +53,7 @@ struct cmd_flag_entry {
 int main(int argc, char** argv) {
     std::string tun_name("tun0");
     std::string usb_name("/dev/ttyUSB0");
+    std::string addr_str("10.0.7.1");
 
     std::vector<cmd_flag_entry> cmd_flags{
         {{"t", "tunname"},
@@ -61,9 +62,15 @@ int main(int argc, char** argv) {
              tun_name = argv[pos + 1];
              std::cout << "Setting tun device name: " << tun_name << '\n';
          }},
-        {{"u", "usbname"}, 1, [&argv, &usb_name](uint32_t pos) {
+        {{"u", "usbname"},
+         1,
+         [&argv, &usb_name](uint32_t pos) {
              usb_name = argv[pos + 1];
              std::cout << "Setting USB device name: " << usb_name << '\n';
+         }},
+        {{"a", "addr"}, 1, [&argv, &addr_str](uint32_t pos) {
+             addr_str = argv[pos + 1];
+             std::cout << "Setting USB device name: " << addr_str << '\n';
          }}};
     std::map<char, cmd_flag_entry*> cmd_flags_by_short_name;
     std::map<std::string, cmd_flag_entry*> cmd_flags_by_long_name;
@@ -124,7 +131,7 @@ int main(int argc, char** argv) {
     // Address
     struct sockaddr_in* addr = (struct sockaddr_in*)&ifr.ifr_addr;
     addr->sin_family = AF_INET;
-    inet_pton(AF_INET, "10.0.7.1", &addr->sin_addr);
+    inet_pton(AF_INET, addr_str.c_str(), &addr->sin_addr);
     ioctl(socket_fd, SIOCSIFADDR, (void*)&ifr);
     // Netmask
     addr = (struct sockaddr_in*)&ifr.ifr_netmask;
