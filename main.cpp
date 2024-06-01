@@ -1,15 +1,24 @@
+#define termio asmtermio
+#define termios asmtermios
+#define winsize asmwinsize
+#include <asm/termios.h>
+#undef winsize
+#undef termios
+#undef termio
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 // #include <linux/if.h>
 #include <linux/if_tun.h>
+// #include <linux/ioctl.h>
+// #include <linux/termios.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+// #include <sys/termios.h>
 #include <unistd.h>
-#include <cerrno>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -19,7 +28,6 @@
 #include <map>
 #include <string>
 #include <thread>
-#include <utility>
 #include <vector>
 
 int tun_open(const char* devname) {
@@ -56,23 +64,20 @@ int main(int argc, char** argv) {
     std::string tun_name("tun0");
     std::string usb_name("/dev/ttyUSB0");
     std::string addr_str("10.0.7.1");
+    uint32_t baud_rate = 9600;
 
     std::vector<cmd_flag_entry> cmd_flags{
         {{"t", "tunname"},
          1,
-         [&argv, &tun_name](uint32_t pos) {
-             tun_name = argv[pos + 1];
-             std::cout << "Setting tun device name: " << tun_name << '\n';
-         }},
+         [&argv, &tun_name](uint32_t pos) { tun_name = argv[pos + 1]; }},
         {{"u", "usbname"},
          1,
-         [&argv, &usb_name](uint32_t pos) {
-             usb_name = argv[pos + 1];
-             std::cout << "Setting USB device name: " << usb_name << '\n';
-         }},
-        {{"a", "addr"}, 1, [&argv, &addr_str](uint32_t pos) {
-             addr_str = argv[pos + 1];
-             std::cout << "Setting address: " << addr_str << '\n';
+         [&argv, &usb_name](uint32_t pos) { usb_name = argv[pos + 1]; }},
+        {{"a", "addr"},
+         1,
+         [&argv, &addr_str](uint32_t pos) { addr_str = argv[pos + 1]; }},
+        {{"b", "baud"}, 1, [&argv, &baud_rate](uint32_t pos) {
+             baud_rate = std::stoi(argv[pos + 1]);
          }}};
     std::map<char, cmd_flag_entry*> cmd_flags_by_short_name;
     std::map<std::string, cmd_flag_entry*> cmd_flags_by_long_name;
@@ -118,6 +123,11 @@ int main(int argc, char** argv) {
         }
     }
 
+    std::cout << "tun device name: " << tun_name << '\n';
+    std::cout << "USB device name: " << usb_name << '\n';
+    std::cout << "Address: " << addr_str << '\n';
+    std::cout << "Baud rate: " << baud_rate << '\n';
+
     int tun_fd;
     int32_t nbytes;
     uint8_t buf[256];
@@ -149,6 +159,16 @@ int main(int argc, char** argv) {
     std::cout << "Configured " << tun_name << "\n";
 
     int usb_fd = open(usb_name.c_str(), O_RDWR | O_NONBLOCK);
+    struct termios2 tio;
+    ioctl(usb_fd, TCGETS2, &tio);
+    tio.c_cflag &= ~CBAUD;
+    tio.c_cflag |= BOTHER;
+    tio.c_ispeed = baud_rate;
+    tio.c_ospeed = baud_rate;
+    if (ioctl(usb_fd, TCSETS2, &tio) != 0) {
+        std::cerr << "Couldn't configure USB\n";
+        exit(3);
+    }
 
     while (1) {
         nbytes = read(tun_fd, buf, sizeof(buf));
