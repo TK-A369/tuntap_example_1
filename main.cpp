@@ -8,15 +8,12 @@
 
 #include <arpa/inet.h>
 #include <fcntl.h>
-// #include <linux/if.h>
 #include <linux/if_tun.h>
-// #include <linux/ioctl.h>
-// #include <linux/termios.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-// #include <sys/termios.h>
 #include <unistd.h>
 #include <cstdint>
 #include <cstdlib>
@@ -34,7 +31,7 @@ int tun_open(const char* devname) {
     struct ifreq ifr;
     int fd, err;
 
-    fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
+    fd = open("/dev/net/tun", O_RDWR);
     if (fd < 0) {
         std::cerr << "Couldn't open /dev/net/tun\n";
         exit(1);
@@ -158,7 +155,7 @@ int main(int argc, char** argv) {
 
     std::cout << "Configured " << tun_name << "\n";
 
-    int usb_fd = open(usb_name.c_str(), O_RDWR | O_NONBLOCK);
+    int usb_fd = open(usb_name.c_str(), O_RDWR);
     struct termios2 tio;
     ioctl(usb_fd, TCGETS2, &tio);
     tio.c_cflag &= ~CBAUD;
@@ -170,20 +167,27 @@ int main(int argc, char** argv) {
         exit(3);
     }
 
+    struct pollfd pollfds[] = {{.fd = tun_fd, .events = POLLIN, .revents = 0},
+                               {.fd = usb_fd, .events = POLLIN, .revents = 0}};
+
     while (1) {
-        nbytes = read(tun_fd, buf, sizeof(buf));
-        if (nbytes > 0) {
+        poll(pollfds, sizeof(pollfds) / sizeof(*pollfds), 1000);
+
+        if (pollfds[0].revents & POLLIN) {
+            nbytes = read(tun_fd, buf, sizeof(buf));
             write(usb_fd, buf, nbytes);
             std::cout << "Read " << nbytes << " bytes from tun\n";
+            pollfds[0].revents = 0;
         }
 
-        nbytes = read(usb_fd, buf, sizeof(buf));
-        if (nbytes > 0) {
+        if (pollfds[1].revents & POLLIN) {
+            nbytes = read(usb_fd, buf, sizeof(buf));
             write(tun_fd, buf, nbytes);
             std::cout << "Read " << nbytes << " bytes from USB\n";
+            pollfds[1].revents = 0;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     return 0;
