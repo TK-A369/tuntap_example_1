@@ -41,7 +41,7 @@ int tun_open(const char* devname) {
     }
 
     memset(&ifr, 0, sizeof(ifr));
-    ifr.ifr_flags = IFF_TUN;
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
     strncpy(ifr.ifr_name, devname, IFNAMSIZ);
 
     err = ioctl(fd, TUNSETIFF, (void*)&ifr);
@@ -61,7 +61,7 @@ struct cmd_flag_entry {
 };
 
 int main(int argc, char** argv) {
-    std::string tun_name("tun0");
+    std::string tun_name("tun2uart");
     std::string usb_name("/dev/ttyUSB0");
     std::string addr_str("10.0.7.1");
     uint32_t baud_rate = 9600;
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
 
     int tun_fd;
     int32_t nbytes;
-    uint8_t buf[256];
+    uint8_t buf[3000];
 
     tun_fd = tun_open(tun_name.c_str());
     std::cout << "Device " << tun_name << " opened\n";
