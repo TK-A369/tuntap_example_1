@@ -160,8 +160,26 @@ int main(int argc, char** argv) {
     int usb_fd = open(usb_name.c_str(), O_RDWR);
     struct termios2 tio;
     ioctl(usb_fd, TCGETS2, &tio);
-    tio.c_cflag &= ~CBAUD;
-    tio.c_cflag |= BOTHER;
+    //    memset(&tio, 0, sizeof(tio));
+    tio.c_cflag &= ~(CBAUD        // To use any baud
+                     | PARENB     // No parity
+                     | CSTOPB     // One stop bit
+                     | CRTSCTS);  // Disable RTS/CTS hardware flow control
+    tio.c_cflag |= BOTHER         // To use any baud
+                   | CS8          // 8 data bits
+                   | CREAD        // So we can read
+                   | CLOCAL;      // Disable mode-specific signal lines
+    tio.c_lflag &= ~(ICANON       // Disable canonical mode (line-by-line)
+                     | ECHO       // Disable echo
+                     | ECHOE      // Disable erasure
+                     | ECHONL     // Disable new-line echo
+                     | ISIG);  // Don't interpret certain characters as special
+    tio.c_iflag &= ~(IXON | IXOFF | IXANY  // Disable s/w flow control
+                     | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR |
+                     ICRNL);  // Disable handling certain characters as special
+    tio.c_oflag &= ~(
+        OPOST |
+        ONLCR);  // Don't interpret certain characters (e.g. newline) as special
     tio.c_ispeed = baud_rate;
     tio.c_ospeed = baud_rate;
     if (ioctl(usb_fd, TCSETS2, &tio) != 0) {
