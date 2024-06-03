@@ -181,7 +181,13 @@ int main(int argc, char** argv) {
         if (pollfds[0].revents & POLLIN) {
             // Received data from tun
             nbytes = read(tun_fd, buf, sizeof(buf));
+            write(usb_fd, &nbytes, 1);
             write(usb_fd, buf, nbytes);
+            uint8_t checksum = 0;
+            for (uint32_t i = 0; i < nbytes; i++) {
+                checksum ^= buf[i];
+            }
+            write(usb_fd, &checksum, 1);
             std::cout << "Read " << nbytes << " bytes from tun\n";
             pollfds[0].revents = 0;
         }
