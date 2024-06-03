@@ -227,6 +227,11 @@ int main(int argc, char** argv) {
                     usb_data_expected_count |=
                         (uint8_t)(buf[i]
                                   << ((5 - usb_data_received_count) * 8));
+
+                    if (usb_data_received_count == 5) {
+                        std::cout << std::dec << usb_data_expected_count
+                                  << std::hex << " bytes should be received\n";
+                    }
                 } else if (usb_data_received_count - 6 <
                            usb_data_expected_count) {
                     usb_buf[usb_data_received_count - 6] = buf[i];
@@ -239,14 +244,17 @@ int main(int argc, char** argv) {
 
                     if (received_checksum == calculated_checksum) {
                         write(tun_fd, usb_buf, usb_data_expected_count);
-                        std::cout << "Read " << usb_data_received_count
+                        std::cout << "Read " << std::dec
+                                  << usb_data_received_count << std::hex
                                   << " bytes from USB\n";
+                        should_reset = true;
                     } else {
                         std::cout << "Checksum error\n";
                         should_reset = true;
                     }
                 }
                 if (should_reset) {
+                    std::cout << "Resetting USB frame parsing\n";
                     usb_data_received_count = 0;
                     usb_data_expected_count = 0;
                 } else {
