@@ -170,10 +170,16 @@ int main(int argc, char** argv) {
     struct pollfd pollfds[] = {{.fd = tun_fd, .events = POLLIN, .revents = 0},
                                {.fd = usb_fd, .events = POLLIN, .revents = 0}};
 
+    int32_t usb_data_expected_count = -1;
+    uint32_t usb_data_received_count = 0;
+    uint8_t usb_buf[3000];
+    uint8_t usb_data_checksum = 0;
+
     while (1) {
         poll(pollfds, sizeof(pollfds) / sizeof(*pollfds), 1000);
 
         if (pollfds[0].revents & POLLIN) {
+            // Received data from tun
             nbytes = read(tun_fd, buf, sizeof(buf));
             write(usb_fd, buf, nbytes);
             std::cout << "Read " << nbytes << " bytes from tun\n";
@@ -181,9 +187,30 @@ int main(int argc, char** argv) {
         }
 
         if (pollfds[1].revents & POLLIN) {
+            // Received data from USB
             nbytes = read(usb_fd, buf, sizeof(buf));
-            write(tun_fd, buf, nbytes);
-            std::cout << "Read " << nbytes << " bytes from USB\n";
+            for (uint32_t i = 0; i < nbytes; i++) {
+                if (usb_data_expected_count == -1) {
+                    usb_data_expected_count = buf[i];
+                } else if (usb_data_received_count >= usb_data_expected_count) {
+                    uint8_t received_checksum = buf[i];
+                    if (received_checksum == usb_data_checksum) {
+                        write(tun_fd, usb_buf, usb_data_expected_count);
+                        std::cout << "Read " << usb_data_received_count
+                                  << " bytes from USB\n";
+                    } else {
+                        std::cout << "Read " << usb_data_received_count
+                                  << " corrupted bytes from USB\n";
+                    }
+
+                    usb_data_expected_count = -1;
+                    usb_data_checksum = 0;
+                } else {
+                    usb_buf[usb_data_received_count] = buf[i];
+                    usb_data_received_count++;
+                    usb_data_checksum ^= buf[i];
+                }
+            }
             pollfds[1].revents = 0;
         }
 
