@@ -172,10 +172,9 @@ int main(int argc, char** argv) {
     struct pollfd pollfds[] = {{.fd = tun_fd, .events = POLLIN, .revents = 0},
                                {.fd = usb_fd, .events = POLLIN, .revents = 0}};
 
-    int32_t usb_data_expected_count = -1;
+    int32_t usb_data_expected_count = 0;
     uint32_t usb_data_received_count = 0;
     uint8_t usb_buf[3000];
-    uint8_t usb_data_checksum = 0;
 
     while (1) {
         poll(pollfds, sizeof(pollfds) / sizeof(*pollfds), 1000);
@@ -225,11 +224,11 @@ int main(int argc, char** argv) {
                     }
                 } else if (usb_data_received_count < 6) {
                     usb_data_expected_count |=
-                        (uint8_t)(buf[i]
-                                  << ((5 - usb_data_received_count) * 8));
+                        buf[i] << ((5 - usb_data_received_count) * 8);
 
                     if (usb_data_received_count == 5) {
-                        std::cout << std::dec << usb_data_expected_count
+                        std::cout << '\n'
+                                  << std::dec << usb_data_expected_count
                                   << std::hex << " bytes should be received\n";
                     }
                 } else if (usb_data_received_count - 6 <
