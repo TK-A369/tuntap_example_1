@@ -21,6 +21,8 @@
 
 #include <chrono>
 #include <functional>
+#include <iomanip>
+#include <ios>
 #include <iostream>
 #include <map>
 #include <string>
@@ -181,7 +183,20 @@ int main(int argc, char** argv) {
         if (pollfds[0].revents & POLLIN) {
             // Received data from tun
             nbytes = read(tun_fd, buf, sizeof(buf));
-            write(usb_fd, &nbytes, 1);
+
+            std::cout << std::hex;
+            for (uint32_t i = 0; i < nbytes; i++) {
+                std::cout << (uint16_t)buf[i] << ' ';
+            }
+            std::cout << std::dec << '\n';
+
+            uint8_t tmp_buf[6] = {'A',
+                                  'T',
+                                  (uint8_t)((nbytes >> 24) & 0xFF),
+                                  (uint8_t)((nbytes >> 16) & 0xFF),
+                                  (uint8_t)((nbytes >> 8) & 0xFF),
+                                  (uint8_t)(nbytes & 0xFF)};
+            write(usb_fd, tmp_buf, 6);
             write(usb_fd, buf, nbytes);
             uint8_t checksum = 0;
             for (uint32_t i = 0; i < nbytes; i++) {
@@ -195,28 +210,50 @@ int main(int argc, char** argv) {
         if (pollfds[1].revents & POLLIN) {
             // Received data from USB
             nbytes = read(usb_fd, buf, sizeof(buf));
+            std::cout << std::hex;
             for (uint32_t i = 0; i < nbytes; i++) {
-                if (usb_data_expected_count == -1) {
-                    usb_data_expected_count = buf[i];
-                } else if (usb_data_received_count >= usb_data_expected_count) {
+                std::cout << (uint16_t)buf[i] << ' ';
+
+                bool should_reset = false;
+                if (usb_data_received_count == 0) {
+                    if (buf[i] != 'A') {
+                        should_reset = true;
+                    }
+                } else if (usb_data_received_count == 1) {
+                    if (buf[i] != 'T') {
+                        should_reset = true;
+                    }
+                } else if (usb_data_received_count < 6) {
+                    usb_data_expected_count |=
+                        (uint8_t)(buf[i]
+                                  << ((5 - usb_data_received_count) * 8));
+                } else if (usb_data_received_count - 6 <
+                           usb_data_expected_count) {
+                    usb_buf[usb_data_received_count - 6] = buf[i];
+                } else {
                     uint8_t received_checksum = buf[i];
-                    if (received_checksum == usb_data_checksum) {
+                    uint8_t calculated_checksum = 0;
+                    for (uint32_t j = 0; j < usb_data_expected_count; j++) {
+                        calculated_checksum ^= usb_buf[j];
+                    }
+
+                    if (received_checksum == calculated_checksum) {
                         write(tun_fd, usb_buf, usb_data_expected_count);
                         std::cout << "Read " << usb_data_received_count
                                   << " bytes from USB\n";
                     } else {
-                        std::cout << "Read " << usb_data_received_count
-                                  << " corrupted bytes from USB\n";
+                        std::cout << "Checksum error\n";
+                        should_reset = true;
                     }
-
-                    usb_data_expected_count = -1;
-                    usb_data_checksum = 0;
+                }
+                if (should_reset) {
+                    usb_data_received_count = 0;
+                    usb_data_expected_count = 0;
                 } else {
-                    usb_buf[usb_data_received_count] = buf[i];
                     usb_data_received_count++;
-                    usb_data_checksum ^= buf[i];
                 }
             }
+            std::cout << std::dec << '\n';
             pollfds[1].revents = 0;
         }
 
